@@ -203,14 +203,15 @@ package object dialect {
     import Config.ConfigConversions
 
     def apply(sft: SimpleFeatureType, schema: String): Tables = {
+      val logged = Option(sft.getUserData.get(PartitionedPostgisDialect.Config.WalLogging)).exists(_.toString.toBoolean)
       val view = TableConfig(schema, sft.getTypeName, None)
       // we disable autovacuum for write ahead tables, as they are transient and get dropped fairly quickly
-      val writeAhead = TableConfig(schema, view.name.raw + WriteAheadTableSuffix.raw, sft.getWriteAheadTableSpace, vacuum = false)
-      val writeAheadPartitions = TableConfig(schema, view.name.raw + PartitionedWriteAheadTableSuffix.raw, sft.getWriteAheadPartitionsTableSpace, vacuum = false)
-      val mainPartitions = TableConfig(schema, view.name.raw + PartitionedTableSuffix.raw, sft.getMainTableSpace)
-      val spillPartitions = TableConfig(schema, view.name.raw + SpillTableSuffix.raw, sft.getMainTableSpace)
-      val analyzeQueue = TableConfig(schema, view.name.raw + AnalyzeTableSuffix.raw, sft.getMainTableSpace)
-      val sortQueue = TableConfig(schema, view.name.raw + SortTableSuffix.raw, sft.getMainTableSpace)
+      val writeAhead = TableConfig(schema, view.name.raw + WriteAheadTableSuffix.raw, sft.getWriteAheadTableSpace, vacuum = false, logged = logged)
+      val writeAheadPartitions = TableConfig(schema, view.name.raw + PartitionedWriteAheadTableSuffix.raw, sft.getWriteAheadPartitionsTableSpace, vacuum = false, logged = logged)
+      val mainPartitions = TableConfig(schema, view.name.raw + PartitionedTableSuffix.raw, sft.getMainTableSpace, logged = logged)
+      val spillPartitions = TableConfig(schema, view.name.raw + SpillTableSuffix.raw, sft.getMainTableSpace, logged = logged)
+      val analyzeQueue = TableConfig(schema, view.name.raw + AnalyzeTableSuffix.raw, sft.getMainTableSpace, logged = logged)
+      val sortQueue = TableConfig(schema, view.name.raw + SortTableSuffix.raw, sft.getMainTableSpace, logged = logged)
       Tables(view, writeAhead, writeAheadPartitions, mainPartitions, spillPartitions, analyzeQueue, sortQueue)
     }
   }
@@ -222,13 +223,14 @@ package object dialect {
    * @param tablespace table space
    * @param storage storage opts (auto vacuum)
    */
-  case class TableConfig(name: TableIdentifier, tablespace: Option[TableSpace], storage: Storage)
+  case class TableConfig(name: TableIdentifier, tablespace: Option[TableSpace], storage: Storage, logged: Logged)
 
   object TableConfig {
-    def apply(schema: String, name: String, tablespace: Option[String], vacuum: Boolean = true): TableConfig = {
+    def apply(schema: String, name: String, tablespace: Option[String], vacuum: Boolean = true, logged: Boolean = true): TableConfig = {
       val storage = if (vacuum) { Storage.Nothing } else { Storage.AutoVacuumDisabled }
       val ts = tablespace.collect { case t if t.nonEmpty => TableSpace(t) }
-      TableConfig(TableIdentifier(schema, name), ts, storage)
+      val walLogged = if (logged) { Logged.Nothing } else { Logged.WalLoggingDisabled }
+      TableConfig(TableIdentifier(schema, name), ts, storage, walLogged)
     }
   }
 
@@ -242,6 +244,19 @@ package object dialect {
     }
     case object AutoVacuumDisabled extends Storage {
       override val opts: String = " WITH (autovacuum_enabled = false)"
+    }
+  }
+
+  sealed trait Logged {
+    def logged: String
+  }
+
+  object Logged {
+    case object Nothing extends Logged {
+      override val logged: String = ""
+    }
+    case object WalLoggingDisabled extends Logged {
+      override val logged: String = " UNLOGGED "
     }
   }
 
