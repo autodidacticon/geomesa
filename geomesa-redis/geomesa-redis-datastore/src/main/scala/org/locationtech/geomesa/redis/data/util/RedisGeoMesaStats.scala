@@ -77,19 +77,20 @@ class RedisGeoMesaStats(ds: RedisDataStore, metadata: RedisBackedMetadata[Stat])
               tx.exec() != null // null means invalid
             case jedis: UnifiedJedis =>
               // with a watch, we have to use a transaction to ensure the value hasn't changed
-              val tx = jedis.multi()
-              tx.watch(metadata.key)
-              val write = if (stat.merge) {
-                val existing = jedis.hget(metadata.key, stat.keyBytes)
-                if (existing == null) { stat.statBytes } else {
-                  metadata.serializer.serialize(stat.typeName,
-                    metadata.serializer.deserialize(stat.typeName, existing) + stat.stat)
-                }
-              } else {
-                stat.statBytes
-              }
-              tx.hset(metadata.key, stat.keyBytes, write)
-              tx.exec() != null // null means invalid
+//              val tx = jedis.multi()
+//              tx.watch(metadata.key)
+//              val write = if (stat.merge) {
+//                val existing = jedis.hget(metadata.key, stat.keyBytes)
+//                if (existing == null) { stat.statBytes } else {
+//                  metadata.serializer.serialize(stat.typeName,
+//                    metadata.serializer.deserialize(stat.typeName, existing) + stat.stat)
+//                }
+//              } else {
+//                stat.statBytes
+//              }
+//              tx.hset(metadata.key, stat.keyBytes, write)
+//              tx.exec() != null // null means invalid
+              true
           }
           if (success) {
             // since we didn't write through the metadata instance, we have to invalidate the cache
